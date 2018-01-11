@@ -1,0 +1,209 @@
+---
+kind: Template
+apiVersion: v1
+metadata:
+  name: python-qsystem
+  annotations:
+    description: OpenShift Python QSystem
+    iconClass: icon-python
+    tags: python,django,qsystem
+parameters:
+- name: APP_NAME
+  description: "Name of the django application"
+  value: "django-qsystem"
+- name: MYSQL_SERVICE_NAME
+  description: Service name for the MariaDB service
+  value: mysql
+- name: DATABASE_ENGINE
+  description: "Database engine: postgresql, mysql or sqlite (default)"
+  value: mysql
+- name: VOLUME_CAPACITY
+  description: Volume space available for data, e.g. 512Mi, 2Gi.
+  required: true
+  value: 2Gi
+- name: "DJANGO_SECRET_KEY",
+  description: "Django Secret Key",
+  generate: "expression",
+  from: "[\\w]{50}"
+- name: APPLICATION_DOMAIN
+  description: "The exposed hostname that will route to the Django service, if left blank a value will be defaulted"
+  value: ""
+- name: SOURCE_REPOSITORY_URL
+  description: "The URL of the repository with your application source code"
+  value: "https://github.com/sjrumsby/django-ex.git"
+- name: SOURCE_REPOSITORY_REF
+  description: "Set this to a branch name, tag or other ref of your repository if you are not using the default branch"
+  value: "master"
+- name: PIP_INDEX_URL
+  description: "The custom PyPi index URL"
+  value: ""
+- name: OPENSHIFT_NAMESPACE
+  description: "The namespace the builder images exist within"
+  value: "openshift"
+- name: NAMESPACE
+  description: "The namespace the images exist within"
+  value: "bcgov"
+- name: CONTEXT_DIR
+  description: "Set this to the relative path to your project if it is not in the root of your repository"
+  value: ""
+objects:
+- kind: Secret
+  apiVersion: v1
+  metadata:
+    name: "${APP_NAME}-secrets"
+  stringData:
+    django-secret-key: "${DJANGO_SECRET_KEY}"
+- kind: Service
+  apiVersion: v1
+  metadata:
+    name: "${APP_NAME}"
+    annotations:
+      description: "Exposes and load balances the application pods"
+      "service.alpha.openshift.io/dependencies": "[{\"name\": \"${MYSQL_SERVICE_NAME}\", \"kind\": \"Service\"}]"
+  spec:
+    ports:
+    - name: web
+      port: 8080
+      targetPort: 8080
+    selector:
+      name: "${APP_NAME}"
+- kind: Route
+  apiVersion: v1
+  metadata:
+    name: "${APP_NAME}"
+  spec:
+    host: "${APPLICATION_DOMAIN}"
+    to:
+      kind: Service
+      name: "${APP_NAME}"
+- kind: ImageStream
+  apiVersion: v1
+  metadata:
+    name: "${APP_NAME}"
+    annotations:
+      description: "Keeps track of changes in the application image"
+- kind: PersistentVolumeClaim
+  apiVersion: v1
+  metadata:
+    name: "${APP_NAME}"
+  spec:
+    accessModes: [ "ReadWriteOnce" ]
+    resources:
+      requests:
+        storage: "${VOLUME_CAPACITY}"
+- kind: BuildConfig
+  apiVersion: v1
+  metadata:
+    name: "${APP_NAME}"
+    annotations:
+      description: "Defines how to build the application"
+      template.alpha.openshift.io/wait-for-ready: "true"
+  spec:
+    source:
+      type: Git
+      git:
+        uri: "${SOURCE_REPOSITORY_URL}"
+        ref: "${SOURCE_REPOSITORY_REF}"
+      contextDir: "${CONTEXT_DIR}"
+    strategy:
+      type: Source
+      sourceStrategy:
+        from:
+          kind: ImageStreamTag
+          namespace: "${OPENSHIFT_NAMESPACE}"
+          name: "python:3.5"
+      env:
+        name: PIP_INDEX_URL
+        value:  "${PIP_INDEX_URL}"
+    output:
+      to:
+        kind: ImageStreamTag
+        name: "${APP_NAME}:latest"
+    triggers:
+    - type: ImageChange
+    - type: ConfigChange
+    postCommit:
+      script: "./manage.py test"
+- kind: DeploymentConfig
+  apiVersion: v1
+  metadata:
+    name: "${APP_NAME}"
+    annotations:
+      description: "Defines how to deploy the application server"
+      template.alpha.openshift.io/wait-for-ready: "true"
+  spec:
+    strategy:
+      type: Recreate
+    triggers:
+    - type: ImageChange
+      imageChangeParams:
+        automatic: true
+        containerNames: [ "${APP_NAME}" ]
+        from:
+          kind: ImageStreamTag
+          name: "${APP_NAME}:latest"
+    - type: ConfigChange
+    replicas: 2
+    selector:
+      name: "${APP_NAME}"
+    template:
+      metadata:
+        name: "${APP_NAME}"
+        labels:
+          name: "${APP_NAME}"
+      spec:
+        volumes:
+        - name: "${APP_NAME}-data"
+          persistentVolumeClaim:
+            claimName: "${APP_NAME}"
+        containers:
+        - name: "${APP_NAME}"
+          image: ""
+          ports:
+          - containerPort: 8080
+          readinessProbe:
+            timeoutSeconds: 3
+            initialDelaySeconds: 3
+            httpGet:
+              path: /health
+              port: 8080
+          livenessProbe:
+            timeoutSeconds: 3
+            initialDelaySeconds: 3
+            httpGet:
+              path: /health
+              port: 8080
+          env:
+          - name: DATABASE_SERVICE_NAME
+            value: "${MYSQL_SERVICE_NAME}"
+          - name: DATABASE_ENGINE
+            value: "${DATABASE_ENGINE}"
+          - name: DATABASE_NAME
+            valueFrom:
+              secretKeyRef:
+                name: "${GALERA_BACKED_NAME}-secrets"
+                key: mysql-database
+          - name: DATABASE_USER
+            valueFrom:
+              secretKeyRef:
+                name: "${GALERA_BACKED_NAME}-secrets"
+                key: mysql-user
+          - name: DATABASE_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: "${GALERA_BACKED_NAME}-secrets"
+                key: mysql-password
+          - name: APP_CONFIG
+            value: "${APP_CONFIG}"
+          - name: DJANGO_SECRET_KEY
+            valueFrom:
+              secretKeyRef:
+                name: "${APP_NAME}-secrets"
+                key: django-secret-key
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 400m
+              memory: 512Mi
