@@ -20,7 +20,7 @@ def config():
     if not name and engine == engines['sqlite']:
         name = os.path.join(settings.BASE_DIR, 'db.sqlite3')
     
-    if engine == "mysql"
+    if engine == "mysql":
         options = {'init_command': "SET sql_mode='STRICT_TRANS_TABLES'"}
     else:
         options = { }
