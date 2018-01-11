@@ -11,6 +11,9 @@ parameters:
 - name: APP_NAME
   description: "Name of the django application"
   value: "django-qsystem"
+- name: GALERA_BACKED_NAME
+  description: "Name of the Galera backend application"
+  value: galera-backend
 - name: MYSQL_SERVICE_NAME
   description: Service name for the MariaDB service
   value: mysql
@@ -21,9 +24,9 @@ parameters:
   description: Volume space available for data, e.g. 512Mi, 2Gi.
   required: true
   value: 2Gi
-- name: "DJANGO_SECRET_KEY",
-  description: "Django Secret Key",
-  generate: "expression",
+- name: "DJANGO_SECRET_KEY"
+  description: "Django Secret Key"
+  generate: "expression"
   from: "[\\w]{50}"
 - name: APPLICATION_DOMAIN
   description: "The exposed hostname that will route to the Django service, if left blank a value will be defaulted"
@@ -45,6 +48,9 @@ parameters:
   value: "bcgov"
 - name: CONTEXT_DIR
   description: "Set this to the relative path to your project if it is not in the root of your repository"
+  value: ""
+- name: APP_CONFIG
+  description: "Relative path to Gunicorn configuration file (optional)"
   value: ""
 objects:
 - kind: Secret
@@ -175,6 +181,8 @@ objects:
               port: 8080
           env:
           - name: DATABASE_SERVICE_NAME
+            value: "${MYSQL_SERVICE_NAME}"
+          - name: MYSQL_SERVICE_HOST
             value: "${MYSQL_SERVICE_NAME}"
           - name: DATABASE_ENGINE
             value: "${DATABASE_ENGINE}"

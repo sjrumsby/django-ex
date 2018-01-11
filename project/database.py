@@ -19,6 +19,11 @@ def config():
     name = os.getenv('DATABASE_NAME')
     if not name and engine == engines['sqlite']:
         name = os.path.join(settings.BASE_DIR, 'db.sqlite3')
+    
+    if engine == "mysql"
+        options = {'init_command': "SET sql_mode='STRICT_TRANS_TABLES'"}
+    else:
+        options = { }
     return {
         'ENGINE': engine,
         'NAME': name,
@@ -26,4 +31,5 @@ def config():
         'PASSWORD': os.getenv('DATABASE_PASSWORD'),
         'HOST': os.getenv('{}_SERVICE_HOST'.format(service_name)),
         'PORT': os.getenv('{}_SERVICE_PORT'.format(service_name)),
+        'OPTIONS': options
     }
