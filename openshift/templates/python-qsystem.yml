@@ -17,6 +17,9 @@ parameters:
 - name: MYSQL_SERVICE_NAME
   description: Service name for the MariaDB service
   value: mysql
+- name: MYSQL_SERVICE_PORT
+  description: Service port for the MariaDB service
+  value: 3306
 - name: DATABASE_ENGINE
   description: "Database engine: postgresql, mysql or sqlite (default)"
   value: mysql
@@ -184,6 +187,8 @@ objects:
             value: "${MYSQL_SERVICE_NAME}"
           - name: MYSQL_SERVICE_HOST
             value: "${MYSQL_SERVICE_NAME}"
+          - name: MYSQL_SERVICE_PORT
+            value: "${MYSQL_SERVICE_PORT}"
           - name: DATABASE_ENGINE
             value: "${DATABASE_ENGINE}"
           - name: DATABASE_NAME
